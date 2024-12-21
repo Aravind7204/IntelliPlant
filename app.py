@@ -6,6 +6,20 @@ from werkzeug.utils import secure_filename
 import json
 
 app = Flask(__name__)
+
+# Function to start the Express server using subprocess
+def start_express_server():
+    express_port = 4000
+    try:
+        # Run the Express server in a separate process
+        subprocess.Popen(['node', 'server.js'])  # Ensure server.js is in the correct path
+        print(f"Express.js server started on port {express_port}")
+    except Exception as e:
+        print(f"Error starting Express server: {e}")
+
+# Initialize Express server when Flask starts
+start_express_server()
+
 app.config['UPLOAD_FOLDER'] = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
@@ -19,17 +33,23 @@ with open('./static/solutions/solutions.json', 'r') as file:
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Function to make predictions
+# Optimized function for making predictions
 def model_prediction(image_path):
     try:
+        # Load image and preprocess it to the correct size
         image = tf.keras.preprocessing.image.load_img(image_path, target_size=(64, 64))  # Match input size for your model
         input_arr = tf.keras.preprocessing.image.img_to_array(image)
-        input_arr = np.array([input_arr])  # Convert single image to batch
+        input_arr = np.expand_dims(input_arr, axis=0)  # Convert single image to batch of 1
+
+        # Normalize the image (if your model requires it, remove if not needed)
+        input_arr = input_arr / 255.0
+
+        # Perform prediction
         predictions = model.predict(input_arr)
         
-        # Get the predicted class and the associated probability
+        # Get the predicted class and associated probability
         predicted_class = np.argmax(predictions)  # Class with the highest probability
-        predicted_probability = np.max(predictions)  # The highest probability value
+        predicted_probability = np.max(predictions)  # Highest probability value
         
         return predicted_class, predicted_probability
     except Exception as e:
@@ -45,7 +65,6 @@ def uploaded_file(filename):
 @app.route('/')
 def home():
     return render_template('index.html')
-
 
 @app.route('/terms')
 def terms():
@@ -116,9 +135,6 @@ def get_solution():
     solution = solutions.get(disease_name, "Solution not found for this disease.")
     return jsonify({"disease_name": disease_name, "solution": solution})
 
-
-
 if __name__ == '__main__':
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     app.run(debug=False, host='0.0.0.0', port=8000)
-
